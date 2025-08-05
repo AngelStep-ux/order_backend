@@ -1,0 +1,29 @@
+# виртуальные окружения
+venv/
+.env/
+.envrc/
+
+
+# файлы базы данных
+db.sqlite3
+
+# файлы миграций
+*/migrations/*.py
+*/migrations/*.pyc
+
+# файлы Python bytecode
+*.pyc
+*.pyo
+__pycache__/
+
+# лог-файлы
+*.log
+
+# файлы IDE и редакторов
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+
+
