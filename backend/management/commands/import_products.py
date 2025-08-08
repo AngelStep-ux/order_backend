@@ -6,7 +6,6 @@ class Command(BaseCommand):
     help = 'Импорт товаров из YAML'
 
     def handle(self, *args, **kwargs):
-        # Ваш путь к файлу YAML
         path = '/home/admin1/Рабочий стол/my_project/shop1.yaml'
         with open(path, 'r', encoding='utf-8') as f:
             data = yaml.safe_load(f)
