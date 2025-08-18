@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
+from django.utils import timezone
 
 STATUS_ORDERS = [
     ('new', 'Новый'),
@@ -48,6 +49,10 @@ class Shop(models.Model):
     def __str__(self):
         return self.name
 
+    class Meta:
+        verbose_name = "Магазин"
+        verbose_name_plural = "Магазины"
+
 class Category(models.Model):
     shops = models.ManyToManyField(Shop, help_text="Выберите магазин")
     name = models.CharField(max_length=50)
@@ -55,16 +60,24 @@ class Category(models.Model):
     def __str__(self):
         return self.name
 
+    class Meta:
+        verbose_name = "Категория"
+        verbose_name_plural = "Категории"
+
 class Product(models.Model):
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='products')
     name = models.CharField(max_length=50)
     description = models.TextField(null=True, blank=True)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.name
+
+    class Meta:
+        verbose_name = "Товар"
+        verbose_name_plural = "Товары"
 
 class ProductInfo(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='product_infos')
@@ -77,11 +90,19 @@ class ProductInfo(models.Model):
     def __str__(self):
         return f"{self.name} {self.shop.name}"
 
+    class Meta:
+        verbose_name = "Информация о товаре"
+        verbose_name_plural = "Информация о товарах"
+
 class Parameter(models.Model):
     name = models.CharField(max_length=50)
 
     def __str__(self):
         return self.name
+
+    class Meta:
+        verbose_name = "Параметр"
+        verbose_name_plural = "Параметры"
 
 class ProductParameter(models.Model):
     product_info = models.ForeignKey(ProductInfo, on_delete=models.CASCADE, related_name='parameters')
@@ -95,11 +116,13 @@ class Order(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')
     dt = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=STATUS_ORDERS, default='new')
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"Order #{self.id} by {self.user.username}"
+
+    class Meta:
+        verbose_name = "Заказ"
+        verbose_name_plural = "Заказы"
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
@@ -109,6 +132,10 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.quantity} x {self.product.name} ({self.shop.name}) in Order #{self.order.id}"
+
+    class Meta:
+        verbose_name = "Элемент заказа"
+        verbose_name_plural = "Элементы заказа"
 
 class Contact(models.Model):
     type = models.CharField(max_length=30, choices=CONTACT_INFO)

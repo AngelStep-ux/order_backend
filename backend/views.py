@@ -1,74 +1,113 @@
 from django.http import HttpResponse
-from rest_framework import viewsets
-from .models import Product, Category, Shop, Order, OrderItem, ProductInfo
-from .serializers import ProductSerializer, CategorySerializer, ShopSerializer, OrderSerializer, OrderItemSerializer
+from rest_framework import viewsets, generics, status
 from rest_framework.response import Response
-from rest_framework import generics
-from rest_framework import status
 from rest_framework.decorators import api_view
-import json
-
-from django.contrib.auth.models import User
-from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework import serializers
 from rest_framework import permissions
-from rest_framework_simplejwt.views import TokenObtainPairView
+from django.contrib.auth import get_user_model
+from rest_framework.views import APIView
 
-def intial_page(request):
+User = get_user_model()
+
+from .models import (
+    Product,
+    Category,
+    Shop,
+    Order,
+    OrderItem,
+    ProductInfo,
+    Contact,
+)
+from .serializers import (
+    ProductSerializer,
+    CategorySerializer,
+    ShopSerializer,
+    OrderSerializer,
+    OrderItemSerializer,
+    UserSerializer,
+    ContactSerializer,
+)
+
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.tokens import RefreshToken
+
+
+def initial_page(request):
     return HttpResponse('Welcome to the web service for ordering goods!')
 
-class UserSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ['id', 'username', 'password', 'email']
-        extra_kwargs = {'password': {'write_only': True}}
-
-    def create(self, validated_data):
-        user = User(**validated_data)
-        user.set_password(validated_data['password'])
-        user.save()
-        return user
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [permissions.AllowAny]
 
+
 class CustomTokenObtainPairView(TokenObtainPairView):
     permission_classes = [permissions.AllowAny]
 
 
-class CategoryViewSet(viewsets.ModelViewSet):
-    queryset = Category.objects.all()
-    serializer_class = CategorySerializer
-
-class ProductViewSet(viewsets.ModelViewSet):
+class ProductListView(generics.ListAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
 
-class ShopViewSet(viewsets.ModelViewSet):
-    queryset = Shop.objects.all()
-    serializer_class = ShopSerializer
 
-class OrderViewSet(viewsets.ModelViewSet):
-    queryset = Order.objects.all()
+class ProductInfoListView(generics.ListAPIView):
+    queryset = ProductInfo.objects.select_related('product', 'shop').all()
+    serializer_class = ProductSerializer
+
+
+class ContactListCreateView(generics.ListCreateAPIView):
+    serializer_class = ContactSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Contact.objects.filter(user=self.request.user)
+
+
+class ContactDestroyView(generics.DestroyAPIView):
+    queryset = Contact.objects.all()
+    permission_classes = [permissions.IsAuthenticated]
+
+
+class UserOrdersListView(generics.ListAPIView):
+    serializer_class = OrderSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Order.objects.filter(user=self.request.user).order_by('-dt')
+
+
+class CreateOrderView(generics.CreateAPIView):
     serializer_class = OrderSerializer
 
-class OrderItemViewSet(viewsets.ModelViewSet):
-    queryset = OrderItem.objects.all()
-    serializer_class = OrderItemSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
-class ExportProductsView(generics.ListAPIView):
-    queryset = Product.objects.all()
-    serializer_class = ProductSerializer
+    def post(self, request, *args, **kwargs):
+        items_data = request.data.get('items')
+        if not items_data:
+            return Response({"error": "Нет данных"}, status=400)
 
-    def get(self, request, *args, **kwargs):
-        products = self.get_queryset()
-        serializer = self.get_serializer(products, many=True)
+        order = Order.objects.create(user=request.user, status='new')
+
+        for item in items_data:
+            product_info_id = item.get('product_info_id')
+            quantity = item.get('quantity', 1)
+            try:
+                product_info = ProductInfo.objects.get(id=product_info_id)
+                shop = product_info.shop
+                OrderItem.objects.create(
+                    order=order,
+                    product_info=product_info,
+                    shop=shop,
+                    quantity=quantity
+                )
+            except ProductInfo.DoesNotExist:
+                return Response({"error": f"Товар с id {product_info_id} не найден"}, status=404)
+
+        serializer = OrderSerializer(order)
         return Response(serializer.data)
 
 
-
+# Вьюха для импорта товаров
 @api_view(['POST'])
 def import_products(request):
     if request.method == 'POST':
@@ -108,4 +147,34 @@ def import_products(request):
             )
 
         return Response({'status': 'Импорт завершен'}, status=status.HTTP_201_CREATED)
-    return Response({'error': 'Неверный метод'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Вьюха для получения списка товаров
+@api_view(['GET'])
+def get_products(request):
+    products = Product.objects.all()
+    serializer = ProductSerializer(products, many=True)
+    return Response(serializer.data)
+
+
+class ExportProductsView(APIView):
+    def get(self, request):
+        products = Product.objects.all()
+        serializer = ProductSerializer(products, many=True)
+        return Response(serializer.data)
+
+class CategoryViewSet(viewsets.ModelViewSet):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+
+class ProductViewSet(viewsets.ModelViewSet):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+
+class ShopViewSet(viewsets.ModelViewSet):
+    queryset = Shop.objects.all()
+    serializer_class = ShopSerializer
+
+class OrderViewSet(viewsets.ModelViewSet):
+    queryset = Order.objects.all()
+    serializer_class = OrderSerializer
