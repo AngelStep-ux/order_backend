@@ -5,6 +5,16 @@ from rest_framework.decorators import api_view
 from rest_framework import permissions
 from django.contrib.auth import get_user_model
 from rest_framework.views import APIView
+from django.utils.http import urlsafe_base64_decode
+from django.contrib.auth.tokens import default_token_generator
+
+from django.core.mail import send_mail
+from django.contrib.sites.shortcuts import get_current_site
+from django.urls import reverse
+
+from django.utils.http import urlsafe_base64_encode
+from django.utils.encoding import force_bytes
+from django.conf import settings
 
 User = get_user_model()
 
@@ -34,11 +44,28 @@ from rest_framework_simplejwt.tokens import RefreshToken
 def initial_page(request):
     return HttpResponse('Welcome to the web service for ordering goods!')
 
+def send_activation_email(request, user):
+    current_site = get_current_site(request)
+    uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+    token = default_token_generator.make_token(user)
+    activation_link = f"http://{current_site.domain}{reverse('activate', args=[uidb64, token])}"
+
+    subject = 'Подтверждение регистрации'
+    message = f'Для подтверждения перейдите по ссылке: {activation_link}'
+    from_email = settings.EMAIL_HOST_USER
+    recipient_list = [user.email]
+
+    send_mail(subject, message, from_email, recipient_list)
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [permissions.AllowAny]
+
+    def perform_create(self, serializer):
+        user = serializer.save()
+        request = self.request
+        send_activation_email(request, user)
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -178,3 +205,17 @@ class ShopViewSet(viewsets.ModelViewSet):
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all()
     serializer_class = OrderSerializer
+
+def activate(request, uidb64, token):
+    try:
+        uid = urlsafe_base64_decode(uidb64).decode()
+        user = User.objects.get(pk=uid)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        user = None
+
+    if user is not None and default_token_generator.check_token(user, token):
+        user.is_active = True
+        user.save()
+        return HttpResponse('Ваш аккаунт активирован! Теперь вы можете войти.')
+    else:
+        return HttpResponse('Некорректная ссылка или срок действия истек.')

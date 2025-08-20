@@ -27,18 +27,18 @@ router.register(r'order_items', OrderViewSet, basename='order-item')
 urlpatterns = [
     path('', initial_page, name='initial_page'),
     path('api/', include(router.urls)),
-    path('api/register/', RegisterView.as_view(), name='register'),
-    path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('register/', RegisterView.as_view(), name='register'),
+    path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
 
-    path('api/products/list/', get_products, name='get_products'),
-    path('api/import-products/', import_products, name='import_products'),
+    path('products/list/', get_products, name='get_products'),
+    path('import-products/', import_products, name='import_products'),
 
-    path('api/product-info/', ProductInfoListView.as_view(), name='product_info_list'),
+    path('product-info/', ProductInfoListView.as_view(), name='product_info_list'),
 
-    path('api/contacts/', ContactListCreateView.as_view(), name='contacts_list_create'),
-    path('api/contacts/<int:pk>/', ContactDestroyView.as_view(), name='contact_delete'),
+    path('contacts/', ContactListCreateView.as_view(), name='contacts_list_create'),
+    path('contacts/<int:pk>/', ContactDestroyView.as_view(), name='contact_delete'),
 
-    path('api/my-orders/', UserOrdersListView.as_view(), name='user_orders'),
+    path('my-orders/', UserOrdersListView.as_view(), name='user_orders'),
 
-    path('api/create-order/', CreateOrderView.as_view(), name='create_order'),
+    path('create-order/', CreateOrderView.as_view(), name='create_order'),
 ]
