@@ -1,8 +1,6 @@
 from django.http import HttpResponse
-from rest_framework import viewsets, generics, status
-from rest_framework.response import Response
-from rest_framework.decorators import api_view
-from rest_framework import permissions
+from rest_framework import viewsets, generics
+
 from django.contrib.auth import get_user_model
 from rest_framework.views import APIView
 from django.utils.http import urlsafe_base64_decode
@@ -26,19 +24,24 @@ from .models import (
     OrderItem,
     ProductInfo,
     Contact,
+    Cart,
+    CartItem
 )
 from .serializers import (
     ProductSerializer,
     CategorySerializer,
     ShopSerializer,
     OrderSerializer,
-    OrderItemSerializer,
     UserSerializer,
     ContactSerializer,
+    CartSerializer,
 )
 
 from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework_simplejwt.tokens import RefreshToken
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework import permissions, status
 
 
 def initial_page(request):
@@ -219,3 +222,107 @@ def activate(request, uidb64, token):
         return HttpResponse('Ваш аккаунт активирован! Теперь вы можете войти.')
     else:
         return HttpResponse('Некорректная ссылка или срок действия истек.')
+
+#Работа с корзиной
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_cart(request):
+    cart, created = Cart.objects.get_or_create(user=request.user)
+    serializer = CartSerializer(cart)
+    return Response(serializer.data)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def add_to_cart(request):
+    product_info_id = request.data.get('product_info_id')
+    quantity = int(request.data.get('quantity', 1))
+
+    try:
+        product_info = ProductInfo.objects.get(id=product_info_id)
+    except ProductInfo.DoesNotExist:
+        return Response({'error': 'Product not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    cart, _ = Cart.objects.get_or_create(user=request.user)
+
+    cart_item, created = CartItem.objects.get_or_create(
+        cart=cart,
+        product_info=product_info,
+        defaults={'quantity': quantity}
+    )
+
+    if not created:
+        cart_item.quantity += quantity
+        cart_item.save()
+
+    return Response({'message': 'Товар добавлен в корзину'})
+
+
+@api_view(['PUT'])
+@permission_classes([permissions.IsAuthenticated])
+def update_cart_item(request, item_id):
+    try:
+        cart_item = CartItem.objects.get(id=item_id, cart__user=request.user)
+    except CartItem.DoesNotExist:
+        return Response({'error': 'Элемент не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+    quantity = int(request.data.get('quantity'))
+    if quantity <= 0:
+        cart_item.delete()
+        return Response({'message': 'Элемент удален из корзины'})
+
+    cart_item.quantity = quantity
+    cart_item.save()
+    return Response({'message': 'Количество обновлено'})
+
+
+@api_view(['DELETE'])
+@permission_classes([permissions.IsAuthenticated])
+def remove_from_cart(request, item_id):
+    try:
+        cart_item = CartItem.objects.get(id=item_id, cart__user=request.user)
+        cart_item.delete()
+        return Response({'message': 'Элемент удален'})
+    except CartItem.DoesNotExist:
+        return Response({'error': 'Элемент не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+class ConfirmOrderView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, uidb64):
+        try:
+            order_id = urlsafe_base64_decode(uidb64).decode()
+            order = Order.objects.get(id=order_id)
+        except (TypeError, ValueError, OverflowError, Order.DoesNotExist):
+            return HttpResponse('Некорректная ссылка или заказ не найден.')
+
+        order.status = 'confirmed'
+        order.save()
+
+        return HttpResponse('Заказ подтвержден! Спасибо за покупку.')
+
+class SendOrderConfirmationView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, order_id):
+        try:
+            order = Order.objects.get(id=order_id, user=request.user)
+        except Order.DoesNotExist:
+            return Response({'error': 'Заказ не найден'}, status=404)
+
+        uidb64 = urlsafe_base64_encode(force_bytes(order.id))
+        current_site = get_current_site(request)
+        confirm_url = f"http://{current_site.domain}{reverse('confirm_order', args=[uidb64])}"
+
+        subject = 'Подтверждение заказа'
+        message = f'Для подтверждения заказа перейдите по ссылке: {confirm_url}'
+        send_mail(subject, message, settings.EMAIL_HOST_USER, [request.user.email])
+
+        return Response({'message': 'Письмо отправлено'})
+
+class UserOrderListView(generics.ListAPIView):
+    serializer_class = OrderSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Order.objects.filter(user=self.request.user).order_by('-dt')

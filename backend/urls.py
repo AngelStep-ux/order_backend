@@ -14,7 +14,10 @@ from .views import (
     ContactListCreateView,
     ContactDestroyView,
     UserOrdersListView,
-    CreateOrderView
+    CreateOrderView,
+    ConfirmOrderView,
+    UserOrderListView,
+    SendOrderConfirmationView
 )
 
 router = DefaultRouter()
@@ -41,4 +44,6 @@ urlpatterns = [
     path('my-orders/', UserOrdersListView.as_view(), name='user_orders'),
 
     path('create-order/', CreateOrderView.as_view(), name='create_order'),
+    path('api/orders/<int:order_id>/send_confirmation/', SendOrderConfirmationView.as_view(), name='send_order_confirmation'),
+    path('confirm_order/<str:uidb64>/', ConfirmOrderView.as_view(), name='confirm_order'),
 ]

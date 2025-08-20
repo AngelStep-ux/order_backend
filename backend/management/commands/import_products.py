@@ -10,7 +10,6 @@ class Command(BaseCommand):
         with open(path, 'r', encoding='utf-8') as f:
             data = yaml.safe_load(f)
 
-        # Обработка товаров из data['goods']
         for item in data['goods']:
             category_id = item['category']
 

@@ -12,6 +12,7 @@ from .models import (
     ProductInfo
 )
 
+
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
@@ -34,7 +35,7 @@ class ProductInfoSerializer(serializers.ModelSerializer):
     shop_name = serializers.CharField(source='shop.name', read_only=True)
 
     class Meta:
-        model = Product
+        model = ProductInfo
         fields = ['id', 'product', 'shop_name', 'name', 'quantity', 'price']
 
 class ContactSerializer(serializers.ModelSerializer):
@@ -88,4 +89,17 @@ class UserSerializer(serializers.ModelSerializer):
         user.save()
         return user
 
+class CartItemSerializer(serializers.ModelSerializer):
+    product_info = ProductInfoSerializer()
+
+    class Meta:
+        model = CartItem
+        fields = ['id', 'product_info', 'quantity']
+
+class CartSerializer(serializers.ModelSerializer):
+    items = CartItemSerializer(many=True)
+
+    class Meta:
+        model = Cart
+        fields = ['id', 'items']
 

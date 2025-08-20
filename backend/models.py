@@ -1,6 +1,5 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
-from django.utils import timezone
 
 STATUS_ORDERS = [
     ('new', 'Новый'),
@@ -8,6 +7,8 @@ STATUS_ORDERS = [
     ('shipped', 'Отправлен'),
     ('completed', 'Завершен'),
     ('cancelled', 'Отменен'),
+    ('pending', 'Ожидает подтверждения'),
+    ('confirmed', 'Подтвержден'),
 ]
 
 CONTACT_INFO = [
@@ -116,6 +117,7 @@ class Order(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')
     dt = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=STATUS_ORDERS, default='new')
+    is_confirmed = models.BooleanField(default=False)
 
     def __str__(self):
         return f"Order #{self.id} by {self.user.username}"
