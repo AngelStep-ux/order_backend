@@ -25,5 +25,6 @@ __pycache__/
 *.sublime-workspace
 *.sublime-project
 
+email_settings.py
 
 

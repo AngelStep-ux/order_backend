@@ -6,7 +6,10 @@ from .models import (
     Order,
     OrderItem,
     User,
-    Contact
+    Contact,
+    Cart,
+    CartItem,
+    ProductInfo
 )
 
 class CategorySerializer(serializers.ModelSerializer):
