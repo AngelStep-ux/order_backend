@@ -1,18 +1,21 @@
-from django.http import HttpResponse
-from rest_framework import viewsets, generics
-
-from django.contrib.auth import get_user_model
-from rest_framework.views import APIView
-from django.utils.http import urlsafe_base64_decode
-from django.contrib.auth.tokens import default_token_generator
-
-from django.core.mail import send_mail
-from django.contrib.sites.shortcuts import get_current_site
-from django.urls import reverse
-
-from django.utils.http import urlsafe_base64_encode
-from django.utils.encoding import force_bytes
 from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.contrib.auth.tokens import default_token_generator
+from django.contrib.sites.shortcuts import get_current_site
+from django.core.mail import send_mail
+from django.http import HttpResponse
+from django.urls import reverse
+from django.utils import timezone
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_decode
+from django.utils.http import urlsafe_base64_encode
+from rest_framework import generics, viewsets, status, permissions
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.decorators import api_view, permission_classes
+
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 User = get_user_model()
 
@@ -21,7 +24,6 @@ from .models import (
     Category,
     Shop,
     Order,
-    OrderItem,
     ProductInfo,
     Contact,
     Cart,
@@ -36,13 +38,6 @@ from .serializers import (
     ContactSerializer,
     CartSerializer,
 )
-
-from rest_framework_simplejwt.views import TokenObtainPairView
-
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.response import Response
-from rest_framework import permissions, status
-
 
 def initial_page(request):
     return HttpResponse('Welcome to the web service for ordering goods!')
@@ -70,20 +65,16 @@ class RegisterView(generics.CreateAPIView):
         request = self.request
         send_activation_email(request, user)
 
-
 class CustomTokenObtainPairView(TokenObtainPairView):
     permission_classes = [permissions.AllowAny]
-
 
 class ProductListView(generics.ListAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
 
-
 class ProductInfoListView(generics.ListAPIView):
     queryset = ProductInfo.objects.select_related('product', 'shop').all()
     serializer_class = ProductSerializer
-
 
 class ContactListCreateView(generics.ListCreateAPIView):
     serializer_class = ContactSerializer
@@ -92,11 +83,12 @@ class ContactListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         return Contact.objects.filter(user=self.request.user)
 
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
 class ContactDestroyView(generics.DestroyAPIView):
     queryset = Contact.objects.all()
     permission_classes = [permissions.IsAuthenticated]
-
 
 class UserOrdersListView(generics.ListAPIView):
     serializer_class = OrderSerializer
@@ -105,37 +97,50 @@ class UserOrdersListView(generics.ListAPIView):
     def get_queryset(self):
         return Order.objects.filter(user=self.request.user).order_by('-dt')
 
-
 class CreateOrderView(generics.CreateAPIView):
     serializer_class = OrderSerializer
+    permission_classes = [IsAuthenticated]
 
-    permission_classes = [permissions.IsAuthenticated]
+    def perform_create(self, serializer):
+        order = serializer.save(user=self.request.user)
+        recipient_emails = [self.request.user.email] if self.request.user.is_authenticated and hasattr(
+            self.request.user, 'email') else []
 
-    def post(self, request, *args, **kwargs):
-        items_data = request.data.get('items')
-        if not items_data:
-            return Response({"error": "Нет данных"}, status=400)
+        send_mail(
+            subject='Подтверждение заказа',
+            message=f'Ваш заказ #{order.id} создан. Адрес доставки: {order.address}',
+            from_email='alina.step@mail.ru',
+            recipient_list=recipient_emails,
+            fail_silently=False,
+        )
 
-        order = Order.objects.create(user=request.user, status='new')
+class OrderConfirmUpdateView(generics.UpdateAPIView):  # Переименовано для избежания конфликта
+    queryset = Order.objects.all()
+    serializer_class = OrderSerializer
+    permission_classes = [IsAuthenticated]
 
-        for item in items_data:
-            product_info_id = item.get('product_info_id')
-            quantity = item.get('quantity', 1)
-            try:
-                product_info = ProductInfo.objects.get(id=product_info_id)
-                shop = product_info.shop
-                OrderItem.objects.create(
-                    order=order,
-                    product_info=product_info,
-                    shop=shop,
-                    quantity=quantity
-                )
-            except ProductInfo.DoesNotExist:
-                return Response({"error": f"Товар с id {product_info_id} не найден"}, status=404)
+    def patch(self, request, *args, **kwargs):
+        order_id = kwargs.get('pk')
+        try:
+            order = self.get_queryset().get(pk=order_id, user=request.user)
+        except Order.DoesNotExist:
+            return Response({'detail': 'Заказ не найден.'}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = OrderSerializer(order)
-        return Response(serializer.data)
+        if order.is_confirmed:
+            return Response({'detail': 'Заказ уже подтвержден.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        order.is_confirmed = True
+        order.confirmed_at = timezone.now()
+        order.save()
+
+        return Response({'detail': 'Заказ подтвержден.'})
+
+class ListOrdersView(generics.ListAPIView):
+    serializer_class = OrderSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Order.objects.filter(user=self.request.user).order_by('-created_at')
 
 # Вьюха для импорта товаров
 @api_view(['POST'])
@@ -177,7 +182,7 @@ def import_products(request):
             )
 
         return Response({'status': 'Импорт завершен'}, status=status.HTTP_201_CREATED)
-
+    return Response({'error': 'Метод не разрешен'}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 # Вьюха для получения списка товаров
 @api_view(['GET'])
@@ -185,7 +190,6 @@ def get_products(request):
     products = Product.objects.all()
     serializer = ProductSerializer(products, many=True)
     return Response(serializer.data)
-
 
 class ExportProductsView(APIView):
     def get(self, request):
@@ -223,7 +227,7 @@ def activate(request, uidb64, token):
     else:
         return HttpResponse('Некорректная ссылка или срок действия истек.')
 
-#Работа с корзиной
+# Работа с корзиной
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def get_cart(request):
@@ -231,12 +235,14 @@ def get_cart(request):
     serializer = CartSerializer(cart)
     return Response(serializer.data)
 
-
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def add_to_cart(request):
     product_info_id = request.data.get('product_info_id')
     quantity = int(request.data.get('quantity', 1))
+
+    if not product_info_id:
+        return Response({'error': 'Product info ID is required'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         product_info = ProductInfo.objects.get(id=product_info_id)
@@ -257,7 +263,6 @@ def add_to_cart(request):
 
     return Response({'message': 'Товар добавлен в корзину'})
 
-
 @api_view(['PUT'])
 @permission_classes([permissions.IsAuthenticated])
 def update_cart_item(request, item_id):
@@ -275,7 +280,6 @@ def update_cart_item(request, item_id):
     cart_item.save()
     return Response({'message': 'Количество обновлено'})
 
-
 @api_view(['DELETE'])
 @permission_classes([permissions.IsAuthenticated])
 def remove_from_cart(request, item_id):
@@ -286,7 +290,7 @@ def remove_from_cart(request, item_id):
     except CartItem.DoesNotExist:
         return Response({'error': 'Элемент не найден'}, status=status.HTTP_404_NOT_FOUND)
 
-class ConfirmOrderView(APIView):
+class ConfirmOrderByLinkView(APIView):  # Переименовано
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, uidb64):
@@ -294,7 +298,7 @@ class ConfirmOrderView(APIView):
             order_id = urlsafe_base64_decode(uidb64).decode()
             order = Order.objects.get(id=order_id)
         except (TypeError, ValueError, OverflowError, Order.DoesNotExist):
-            return HttpResponse('Некорректная ссылка или заказ не найден.')
+            return HttpResponse('Некорректная ссылка или заказ не найден.', status=404)
 
         order.status = 'confirmed'
         order.save()
@@ -319,10 +323,3 @@ class SendOrderConfirmationView(APIView):
         send_mail(subject, message, settings.EMAIL_HOST_USER, [request.user.email])
 
         return Response({'message': 'Письмо отправлено'})
-
-class UserOrderListView(generics.ListAPIView):
-    serializer_class = OrderSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return Order.objects.filter(user=self.request.user).order_by('-dt')

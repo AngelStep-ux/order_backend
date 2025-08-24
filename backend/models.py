@@ -67,7 +67,7 @@ class Category(models.Model):
 
 class Product(models.Model):
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='products')
-    name = models.CharField(max_length=50)
+    name = models.CharField(max_length=250)
     description = models.TextField(null=True, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -118,6 +118,12 @@ class Order(models.Model):
     dt = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=STATUS_ORDERS, default='new')
     is_confirmed = models.BooleanField(default=False)
+    address = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __init__(self, *args: any, **kwargs: any):
+        super().__init__(args, kwargs)
+        self.id = None
 
     def __str__(self):
         return f"Order #{self.id} by {self.user.username}"
@@ -128,7 +134,7 @@ class Order(models.Model):
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
-    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name='order_items')
+    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, null=True, blank=True)
     product = models.ForeignKey(ProductInfo, on_delete=models.PROTECT)
     quantity = models.PositiveIntegerField()
 

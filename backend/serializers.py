@@ -3,8 +3,6 @@ from .models import (
     Product,
     Category,
     Shop,
-    Order,
-    OrderItem,
     User,
     Contact,
     Cart,
@@ -42,35 +40,62 @@ class ContactSerializer(serializers.ModelSerializer):
     class Meta:
         model=Contact
         fields=['id','type','value']
+        read_only_fields = ['user']
+
+
+from rest_framework import serializers
+from .models import OrderItem, ProductInfo
+
+
+def get_product_info(obj):
+    product = obj.product
+    return {
+        'id': product.id,
+        'name': product.name,
+    }
+
 
 class OrderItemSerializer(serializers.ModelSerializer):
     product_info = serializers.SerializerMethodField()
-    shop_name = serializers.CharField(source='product_info.shop.name', read_only=True)
+    shop_name = serializers.SerializerMethodField()
+
+    product_id = serializers.IntegerField(write_only=True)
+    quantity = serializers.IntegerField()
 
     class Meta:
-        model=OrderItem
-        fields=['id','product_info','shop_name','quantity']
+        model = OrderItem
+        fields = ['id', 'quantity', 'shop_name', 'product_id', 'product_info']
 
-    def get_product_info(self, obj):
-        return {
-            'id': obj.product_info.id,
-            'name': obj.product_info.name,
-            'product': {
-                'id': obj.product_info.product.id,
-                'name': obj.product_info.product.name,
-            },
-            'shop': obj.product_info.shop.name,
-            'quantity': obj.product_info.quantity,
-            'price': obj.product_info.price,
-        }
+    def create(self, validated_data):
+        product_id = validated_data.pop('product_id')
+        quantity = validated_data.pop('quantity')
+
+        product = ProductInfo.objects.get(id=product_id)
+
+        order_item = OrderItem.objects.create(
+            product=product,
+            quantity=quantity,
+        )
+        return order_item
+
+from rest_framework import serializers
+from .models import Order
 
 class OrderSerializer(serializers.ModelSerializer):
-    items=OrderItemSerializer(many=True)
-    user=serializers.StringRelatedField()
+    items = OrderItemSerializer(many=True)
 
     class Meta:
-        model=Order
-        fields=['id','user','dt','status','items']
+        model = Order
+        fields = ['id', 'user', 'dt', 'status', 'address', 'items', 'is_confirmed', 'created_at']
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items')
+        order = Order.objects.create(**validated_data)
+        for item_data in items_data:
+            serializer = OrderItemSerializer(data=item_data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(order=order)
+        return order
 
 class UserSerializer(serializers.ModelSerializer):
     password=serializers.CharField(write_only=True)
@@ -103,3 +128,13 @@ class CartSerializer(serializers.ModelSerializer):
         model = Cart
         fields = ['id', 'items']
 
+class OrderConfirmSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Order
+        fields = ['id', 'status', 'is_confirmed']
+        read_only_fields = ['id', 'status', 'is_confirmed']
+
+class OrderUpdateStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Order
+        fields = ['status', 'is_confirmed']

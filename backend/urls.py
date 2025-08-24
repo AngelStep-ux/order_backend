@@ -1,5 +1,8 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from rest_framework_simplejwt.views import TokenRefreshView
+
+from . import views
 from .views import (
     CategoryViewSet,
     ProductViewSet,
@@ -7,7 +10,6 @@ from .views import (
     OrderViewSet,
     RegisterView,
     CustomTokenObtainPairView,
-    initial_page,
     get_products,
     import_products,
     ProductInfoListView,
@@ -15,9 +17,8 @@ from .views import (
     ContactDestroyView,
     UserOrdersListView,
     CreateOrderView,
-    ConfirmOrderView,
-    UserOrderListView,
-    SendOrderConfirmationView
+    ConfirmOrderByLinkView,
+    SendOrderConfirmationView, add_to_cart, ListOrdersView
 )
 
 router = DefaultRouter()
@@ -25,13 +26,12 @@ router.register(r'categories', CategoryViewSet)
 router.register(r'products', ProductViewSet)
 router.register(r'shops', ShopViewSet)
 router.register(r'orders', OrderViewSet, basename='order')
-router.register(r'order_items', OrderViewSet, basename='order-item')
 
 urlpatterns = [
-    path('', initial_page, name='initial_page'),
-    path('api/', include(router.urls)),
+    path('', include(router.urls)),
     path('register/', RegisterView.as_view(), name='register'),
     path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     path('products/list/', get_products, name='get_products'),
     path('import-products/', import_products, name='import_products'),
@@ -41,9 +41,14 @@ urlpatterns = [
     path('contacts/', ContactListCreateView.as_view(), name='contacts_list_create'),
     path('contacts/<int:pk>/', ContactDestroyView.as_view(), name='contact_delete'),
 
+    path('orders/', ListOrdersView.as_view(), name='list_orders'),
     path('my-orders/', UserOrdersListView.as_view(), name='user_orders'),
 
-    path('create-order/', CreateOrderView.as_view(), name='create_order'),
+    path('orders/create/', CreateOrderView.as_view(), name='create_order'),
     path('api/orders/<int:order_id>/send_confirmation/', SendOrderConfirmationView.as_view(), name='send_order_confirmation'),
-    path('confirm_order/<str:uidb64>/', ConfirmOrderView.as_view(), name='confirm_order'),
+    path('orders/<str:uidb64>/confirm/', ConfirmOrderView.as_view(), name='confirm_order'),
+    path('cart/add/', add_to_cart, name='add_to_cart'),
+    path('cart/', views.get_cart, name='get_cart'),
+    path('cart/item/<int:item_id>/update/', views.update_cart_item, name='update_cart_item'),
+    path('cart/item/<int:item_id>/delete/', views.remove_from_cart, name='remove_from_cart'),
 ]
