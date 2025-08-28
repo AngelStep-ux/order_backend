@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'backend',
     'rest_framework',
     'djoser',
+    'django_extensions',
 ]
 
 MIDDLEWARE = [

@@ -14,16 +14,15 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
-
+from django.views.generic import TemplateView
 from rest_framework_simplejwt.views import TokenObtainPairView
-
-User = get_user_model()
 
 from .models import (
     Product,
     Category,
     Shop,
     Order,
+    OrderItem,
     ProductInfo,
     Contact,
     Cart,
@@ -38,6 +37,8 @@ from .serializers import (
     ContactSerializer,
     CartSerializer,
 )
+
+User = get_user_model()
 
 def initial_page(request):
     return HttpResponse('Welcome to the web service for ordering goods!')
@@ -106,6 +107,16 @@ class CreateOrderView(generics.CreateAPIView):
         recipient_emails = [self.request.user.email] if self.request.user.is_authenticated and hasattr(
             self.request.user, 'email') else []
 
+        products_info = serializer.validated_data.get('products_info', [])
+        for item in products_info:
+            product_info_id = item.get('product_info_id')
+            quantity = item.get('quantity', 1)
+            try:
+                product_info = ProductInfo.objects.get(id=product_info_id)
+                OrderItem.objects.create(order=order, product_info=product_info, quantity=quantity)
+            except ProductInfo.DoesNotExist:
+                continue
+
         send_mail(
             subject='Подтверждение заказа',
             message=f'Ваш заказ #{order.id} создан. Адрес доставки: {order.address}',
@@ -114,7 +125,7 @@ class CreateOrderView(generics.CreateAPIView):
             fail_silently=False,
         )
 
-class OrderConfirmUpdateView(generics.UpdateAPIView):  # Переименовано для избежания конфликта
+class OrderConfirmUpdateView(generics.UpdateAPIView):
     queryset = Order.objects.all()
     serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated]
@@ -290,21 +301,6 @@ def remove_from_cart(request, item_id):
     except CartItem.DoesNotExist:
         return Response({'error': 'Элемент не найден'}, status=status.HTTP_404_NOT_FOUND)
 
-class ConfirmOrderByLinkView(APIView):  # Переименовано
-    permission_classes = [permissions.AllowAny]
-
-    def get(self, request, uidb64):
-        try:
-            order_id = urlsafe_base64_decode(uidb64).decode()
-            order = Order.objects.get(id=order_id)
-        except (TypeError, ValueError, OverflowError, Order.DoesNotExist):
-            return HttpResponse('Некорректная ссылка или заказ не найден.', status=404)
-
-        order.status = 'confirmed'
-        order.save()
-
-        return HttpResponse('Заказ подтвержден! Спасибо за покупку.')
-
 class SendOrderConfirmationView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -314,12 +310,54 @@ class SendOrderConfirmationView(APIView):
         except Order.DoesNotExist:
             return Response({'error': 'Заказ не найден'}, status=404)
 
-        uidb64 = urlsafe_base64_encode(force_bytes(order.id))
-        current_site = get_current_site(request)
-        confirm_url = f"http://{current_site.domain}{reverse('confirm_order', args=[uidb64])}"
+        address = request.data.get('address')
+        if not address:
+            return Response({'error': 'Пожалуйста, укажите адрес доставки.'}, status=400)
 
+        # статус "ожидает подтверждения"
+        order.address = address
+        order.status = 'pending_confirmation'
+        order.save()
+
+        # ссылка для подтверждения
+        uidb64 = urlsafe_base64_encode(str(order.id).encode())
+        confirm_url = f"http://{request.get_host()}{reverse('confirm_order', args=[uidb64])}"
+
+        # отправляем письмо с ссылкой
         subject = 'Подтверждение заказа'
         message = f'Для подтверждения заказа перейдите по ссылке: {confirm_url}'
         send_mail(subject, message, settings.EMAIL_HOST_USER, [request.user.email])
 
-        return Response({'message': 'Письмо отправлено'})
+        return Response({'message': 'Письмо с подтверждением отправлено'})
+
+class ConfirmOrderByLinkView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, uidb64):
+        try:
+            order_id_str = urlsafe_base64_decode(uidb64).decode()
+            order_id = int(order_id_str)
+            order = Order.objects.get(id=order_id)
+        except (TypeError, ValueError, OverflowError, Order.DoesNotExist):
+            return HttpResponse('Некорректная ссылка или заказ не найден.', status=404)
+
+        # статус "ожидает подтверждения"
+        if order.status != 'pending_confirmation':
+            return HttpResponse('Этот заказ уже подтвержден или недоступен для подтверждения.', status=400)
+
+        # подтверждаем заказ
+        order.status = 'confirmed'
+        order.confirmed_at = timezone.now()
+        order.save()
+
+        return HttpResponse('Заказ подтвержден! Спасибо за покупку.')
+
+class OrderDetailAPIView(generics.RetrieveAPIView):
+    serializer_class = OrderSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Order.objects.filter(user=self.request.user)
+
+class UserOrdersPageView(TemplateView):
+    template_name = 'user_orders.html'

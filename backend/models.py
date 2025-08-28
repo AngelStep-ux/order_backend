@@ -115,15 +115,10 @@ class ProductParameter(models.Model):
 
 class Order(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')
-    dt = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=STATUS_ORDERS, default='new')
     is_confirmed = models.BooleanField(default=False)
-    address = models.CharField(max_length=255)
+    address = models.CharField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
-
-    def __init__(self, *args: any, **kwargs: any):
-        super().__init__(args, kwargs)
-        self.id = None
 
     def __str__(self):
         return f"Order #{self.id} by {self.user.username}"

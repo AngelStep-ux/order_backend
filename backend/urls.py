@@ -15,10 +15,13 @@ from .views import (
     ProductInfoListView,
     ContactListCreateView,
     ContactDestroyView,
-    UserOrdersListView,
     CreateOrderView,
     ConfirmOrderByLinkView,
-    SendOrderConfirmationView, add_to_cart, ListOrdersView
+    SendOrderConfirmationView,
+    add_to_cart,
+    ListOrdersView,
+    UserOrdersPageView,
+    OrderDetailAPIView
 )
 
 router = DefaultRouter()
@@ -42,11 +45,12 @@ urlpatterns = [
     path('contacts/<int:pk>/', ContactDestroyView.as_view(), name='contact_delete'),
 
     path('orders/', ListOrdersView.as_view(), name='list_orders'),
-    path('my-orders/', UserOrdersListView.as_view(), name='user_orders'),
+    path('my-orders/', UserOrdersPageView.as_view(), name='user_orders_page'),
+    path('my-orders/<int:pk>/', OrderDetailAPIView.as_view(), name='order-details'),
 
     path('orders/create/', CreateOrderView.as_view(), name='create_order'),
     path('api/orders/<int:order_id>/send_confirmation/', SendOrderConfirmationView.as_view(), name='send_order_confirmation'),
-    path('orders/<str:uidb64>/confirm/', ConfirmOrderView.as_view(), name='confirm_order'),
+    path('orders/<str:uidb64>/confirm/', ConfirmOrderByLinkView.as_view(), name='confirm_order'),
     path('cart/add/', add_to_cart, name='add_to_cart'),
     path('cart/', views.get_cart, name='get_cart'),
     path('cart/item/<int:item_id>/update/', views.update_cart_item, name='update_cart_item'),

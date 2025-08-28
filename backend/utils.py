@@ -4,6 +4,7 @@ from django.utils.encoding import force_bytes
 from django.contrib.sites.shortcuts import get_current_site
 from django.urls import reverse
 from django.core.mail import send_mail
+from orders.email_settings import EMAIL_HOST_USER
 
 
 def send_activation_email(request, user):
@@ -20,7 +21,7 @@ def send_activation_email(request, user):
     send_mail(
         'Подтверждение регистрации',
         f'Перейдите по ссылке для подтверждения: {activation_link}',
-        'alina.step@mail.ru',
+        EMAIL_HOST_USER,
         [user.email],
         fail_silently=False,
     )

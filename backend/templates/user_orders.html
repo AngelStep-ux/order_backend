@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <title>Мои заказы</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f4f4f4;
+        }
+        .loading {
+            font-size: 18px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Мои заказы</h1>
+
+<div id="loading" class="loading">Загрузка заказов...</div>
+<div id="orders-container" style="display:none;">
+    <table id="orders-table">
+        <thead>
+            <tr>
+                <th>ID заказа</th>
+                <th>Дата создания</th>
+                <th>Статус</th>
+                <th>Адрес доставки</th>
+                <th>Детали</th>
+            </tr>
+        </thead>
+        <tbody id="orders-body">
+
+        </tbody>
+    </table>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    fetchOrders();
+});
+
+function fetchOrders() {
+    fetch('/api/my-orders/', {
+        headers: {
+            'Authorization': 'Bearer ' + localStorage.getItem('access_token')
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Ошибка при получении данных');
+        }
+        return response.json();
+    })
+    .then(data => {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('orders-container').style.display = 'block';
+        populateOrders(data);
+    })
+    .catch(error => {
+        document.getElementById('loading').textContent = 'Ошибка загрузки данных.';
+        console.error(error);
+    });
+}
+
+function populateOrders(orders) {
+    const tbody = document.getElementById('orders-body');
+    tbody.innerHTML = '';
+
+    if (orders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5">Нет заказов.</td></tr>';
+        return;
+    }
+
+    orders.forEach(order => {
+        const row = document.createElement('tr');
+
+        row.innerHTML = `
+            <td>${order.id}</td>
+            <td>${new Date(order.created_at).toLocaleString()}</td>
+            <td>${order.status}</td>
+            <td>${order.address || '-'}</td>
+            <td><a href="/order/${order.id}/">Подробнее</a></td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+</script>
+
+</body>
+</html>
