@@ -16,6 +16,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from django.views.generic import TemplateView
 from rest_framework_simplejwt.views import TokenObtainPairView
+from orders.tasks import send_order_confirmation_email
 
 from .models import (
     Product,
@@ -349,6 +350,9 @@ class ConfirmOrderByLinkView(APIView):
         order.status = 'confirmed'
         order.confirmed_at = timezone.now()
         order.save()
+
+        # Вызов асинхронной задачи для уведомления пользователя
+        send_order_confirmation_email.delay(order.id)
 
         return HttpResponse('Заказ подтвержден! Спасибо за покупку.')
 
