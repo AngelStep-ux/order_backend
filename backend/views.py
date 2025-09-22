@@ -365,3 +365,10 @@ class OrderDetailAPIView(generics.RetrieveAPIView):
 
 class UserOrdersPageView(TemplateView):
     template_name = 'user_orders.html'
+
+class ProductViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint для работы с продуктами.
+    """
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer

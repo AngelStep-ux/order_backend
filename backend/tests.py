@@ -4,6 +4,10 @@ from rest_framework.test import APITestCase
 from django.contrib.auth import get_user_model
 from rest_framework import status
 import base64
+from django.urls import reverse
+from rest_framework.test import APITestCase, APIClient
+from rest_framework import status
+from django.contrib.auth.models import User
 
 from .models import Shop, Category, Product, ProductInfo, Contact, Order
 
@@ -83,3 +87,17 @@ class Tests(APITestCase):
         }
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+class ProductThrottleTest(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user('testuser', 'test@example.com', 'password123')
+        self.client.login(username='testuser', password='password123')
+        self.url = reverse('product-list')
+
+    def test_throttle_limit(self):
+        for i in range(6):  # при лимите 5 запросов в минуту
+            response = self.client.get(self.url)
+            if i < 5:
+                self.assertNotEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+            else:
+                self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)

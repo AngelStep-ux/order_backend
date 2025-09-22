@@ -43,7 +43,17 @@ INSTALLED_APPS = [
     'rest_framework',
     'djoser',
     'django_extensions',
+    'drf_spectacular',
+    'django.contrib.sites',
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+
+    # Провайдеры:
+    'allauth.socialaccount.providers.google',
 ]
+
+SITE_ID = 1
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -53,6 +63,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'dj_rest_auth',
+    'dj_rest_auth.registration',
 ]
 
 ROOT_URLCONF = 'orders.urls'
@@ -139,6 +151,19 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'user': '5/minute',
+    },
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Backend API',
+    'DESCRIPTION': 'Orders API',
+    'VERSION': '1.0.0',
 }
 
 SIMPLE_JWT = {
