@@ -13,6 +13,13 @@ from .email_settings import *
 from pathlib import Path
 from datetime import timedelta
 
+import sentry_sdk
+from sentry_sdk.integrations.django import DjangoIntegration
+from sentry_sdk.integrations.celery import CeleryIntegration
+
+import os
+
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -29,8 +36,15 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+dsn = os.getenv("SENTRY_DSN")
+if dsn:
+    sentry_sdk.init(
+        dsn=dsn,
+        integrations=[DjangoIntegration()],
+        traces_sample_rate=1.0,
+        send_default_pii=True,
+    )
 
-# Application definition
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -39,21 +53,41 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'backend',
+
+
     'rest_framework',
+    'rest_framework.authtoken',
+
     'djoser',
     'django_extensions',
     'drf_spectacular',
     'django.contrib.sites',
+
     'allauth',
     'allauth.account',
     'allauth.socialaccount',
-
-    # Провайдеры:
     'allauth.socialaccount.providers.google',
+
+    'baton',
+    'baton.autodiscover',
+
+    'easy_thumbnails',
+
+    'backend.apps.BackendConfig',
+
+    "cachalot",
 ]
 
 SITE_ID = 1
+
+# настройки изображения
+THUMBNAIL_ALIASES = {
+    '': {
+        'avatar_small': {'size': (100, 100), 'crop': True},
+        'product_thumbnail': {'size': (300, 300), 'crop': True},
+    },
+}
+THUMBNAIL_BASEDIR = 'thumbs'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -63,8 +97,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'dj_rest_auth',
-    'dj_rest_auth.registration',
+    'allauth.account.middleware.AccountMiddleware',
 ]
 
 ROOT_URLCONF = 'orders.urls'
@@ -190,3 +223,22 @@ CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
+
+sentry_sdk.init(
+     dsn="SENTRY_DSN",  #
+     integrations=[
+         DjangoIntegration(),
+         CeleryIntegration(),
+     ],
+
+)
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/1",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        }
+    }
+}

@@ -372,3 +372,16 @@ class ProductViewSet(viewsets.ModelViewSet):
     """
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
+
+class CrashTestView(APIView):
+    def get(self, request):
+        product_id = request.query_params.get('product_id')
+        if product_id is None:
+            # Возвращаем ошибку, что product_id обязателен
+            return Response({"error": "product_id parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        product_exists = False
+        if not product_exists:
+            raise ValueError(f"Product with id {product_id} not found")
+
+        return Response({"message": "Product found"})
